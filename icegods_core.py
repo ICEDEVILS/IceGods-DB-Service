@@ -1,33 +1,55 @@
+import json
 import os
-from flask import Flask, request, jsonify, render_template
-from icegods_core import IceGodsCore
-from dotenv import load_dotenv
+import time
+from datetime import datetime
 
-load_dotenv()
-app = Flask(__name__)
-core = IceGodsCore()
+DB_FILE = "icegods_intel_core.json"
 
-MASTER_KEY = os.getenv("ICEGODS_MASTER_KEY", "ICEGODS_838_SECRET")
+class IceGodsCore:
+    def __init__(self):
+        self.load_core()
 
-@app.route('/api/ingest', methods=['POST'])
-def ingest():
-    key = request.headers.get("X-ICEGODS-KEY")
-    if key != MASTER_KEY:
-        return jsonify({"status": "UNAUTHORIZED"}), 403
+    def load_core(self):
+        if os.path.exists(DB_FILE):
+            try:
+                with open(DB_FILE, 'r') as f:
+                    self.data = json.load(f)
+            except:
+                self.data = []
+        else:
+            self.data = []
 
-    content = request.json
-    entry = core.ingest_intel(
-        bot_source=content.get("bot_name"),
-        target=content.get("target"),
-        raw_intel=content.get("intel_data")
-    )
-    return jsonify({"status": "SUCCESS", "entry": entry})
+    def save_core(self):
+        with open(DB_FILE, 'w') as f:
+            json.dump(self.data, f, indent=4)
 
-@app.route('/')
-def dashboard():
-    intel_feed = core.get_all_intel()
-    return render_template('dashboard.html', feed=intel_feed)
+    def ingest_intel(self, bot_source, target, raw_intel):
+        # --- ALIEN AI LOGIC ---
+        # Detect entropy based on target string complexity
+        entropy = sum(ord(c) for c in target) % 100
+        base_val = raw_intel.get("cost", 500)
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+        # OMEGA detection
+        is_omega = entropy > 85 or "0x" in target.lower()
+        threat = "OMEGA" if is_omega else "CRITICAL"
+
+        # Valuation AI
+        multiplier = 2.5 if is_omega else 1.2
+        final_valuation = f"${base_val * multiplier:,.2f}"
+
+        intel_entry = {
+            "id": f"IG-{int(time.time())}",
+            "source": bot_source,
+            "target": target,
+            "valuation": final_valuation,
+            "threat_level": threat,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "raw": raw_intel
+        }
+
+        self.data.insert(0, intel_entry)
+        self.save_core()
+        return intel_entry
+
+    def get_all_intel(self):
+        return self.data
