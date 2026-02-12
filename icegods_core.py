@@ -1,30 +1,35 @@
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 DB_FILE = "icegods_intel_core.json"
 
 class IceGodsCore:
     def __init__(self):
+        self.core_data = {"intel": [], "bots": {}, "invites": []}
         self.load_core()
 
     def load_core(self):
         if os.path.exists(DB_FILE):
             try:
                 with open(DB_FILE, 'r') as f:
-                    self.core_data = json.load(f)
-            except:
-                self.core_data = {"intel": [], "bots": {}, "invites": []}
-        else:
-            self.core_data = {"intel": [], "bots": {}, "invites": []}
+                    loaded = json.load(f)
+                    # AUTO-REPAIR: If old data was a list, migrate it to the new format
+                    if isinstance(loaded, list):
+                        self.core_data["intel"] = loaded
+                    else:
+                        self.core_data = loaded
+            except Exception as e:
+                print(f"📡 CORE REPAIR ACTIVE: {e}")
+        self.save_core()
 
     def save_core(self):
         with open(DB_FILE, 'w') as f:
             json.dump(self.core_data, f, indent=4)
 
     def ingest_intel(self, bot_name, target, raw_intel):
-        # Update Bot Health (The Detector)
+        # Update Bot Detector
         self.core_data["bots"][bot_name] = {
             "last_seen": datetime.now().strftime('%H:%M:%S'),
             "status": "OPERATIONAL",
@@ -45,15 +50,15 @@ class IceGodsCore:
         }
 
         self.core_data["intel"].insert(0, entry)
-        self.core_data["intel"] = self.core_data["intel"][:50] # Keep last 50
+        self.core_data["intel"] = self.core_data["intel"][:50]
         self.save_core()
         return entry
 
     def check_health(self):
-        """The Detector: Monitors for bot failure"""
         anomalies = []
-        for name, info in self.core_data["bots"].items():
-            # If status was manually set to CRITICAL or hasn't updated
-            if info["status"] == "CRITICAL_ISSUE":
+        # Ensure 'bots' key exists
+        bots = self.core_data.get("bots", {})
+        for name, info in bots.items():
+            if info.get("status") == "CRITICAL_ISSUE":
                 anomalies.append(f"SYSTEM FAILURE: {name} offline.")
         return anomalies
